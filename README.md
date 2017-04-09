@@ -1,1 +1,1 @@
-vio_g2o
+vio_common
