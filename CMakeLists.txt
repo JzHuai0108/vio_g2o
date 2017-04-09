@@ -31,17 +31,18 @@ FIND_PACKAGE(Sophus REQUIRED) # the sophus (commit number b474f0) repo of Steven
 
 IF(USE_ORBSLAM_G2O)
   ADD_DEFINITIONS(-DUSE_SLIM_G2O)
-  SET(ORBSLAM_G2O_PATH $ENV{HOME}/catkin_ws/src/vin_csfm/ORB_SLAM2-viclam/Thirdparty)
+#  SET(ORBSLAM_G2O_PATH) #provide this variable as an CMAKE argument
   SET(G2O_INCLUDE_DIR ${ORBSLAM_G2O_PATH}/g2o)
   SET(G2O_LIBS ${ORBSLAM_G2O_PATH}/g2o/lib/libg2o.so)
 ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
-  SET(G2O_INSTALL_PREFIX $ENV{HOME}/catkin_ws/src/orbslam_dwo/Thirdparty/g2o/local_install)
+
+  SET(G2O_INSTALL_PREFIX $ENV{HOME}/g2o/local_install)
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
-  LIST(APPEND G2O_LIBS
+  LIST(APPEND G2O_LIBRARIES
   cholmod
   csparse
   cxsparse
@@ -86,12 +87,13 @@ LIST(APPEND SOURCEFILES
 src/anchored_points.cpp
 src/IMU_constraint.cpp
 src/scale_solver.cpp
+include/vio_g2o/IMUErrorModel.h
 include/vio_g2o/IMUErrorModel.cpp
 include/vio_g2o/transformations.h
 )
 
 LIST(APPEND LINK_LIBS
-${G2O_LIBS}
+${G2O_LIBRARIES}
 ${vio_common_LIBRARIES}
 )
 
