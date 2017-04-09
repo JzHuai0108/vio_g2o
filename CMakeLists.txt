@@ -37,11 +37,12 @@ IF(USE_ORBSLAM_G2O)
 ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
+
   SET(G2O_INSTALL_PREFIX $ENV{HOME}/g2o/local_install)
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
-  LIST(APPEND G2O_LIBS
+  LIST(APPEND G2O_LIBRARIES
   cholmod
   csparse
   cxsparse
@@ -86,12 +87,13 @@ LIST(APPEND SOURCEFILES
 src/anchored_points.cpp
 src/IMU_constraint.cpp
 src/scale_solver.cpp
+include/vio_g2o/IMUErrorModel.h
 include/vio_g2o/IMUErrorModel.cpp
 include/vio_g2o/transformations.h
 )
 
 LIST(APPEND LINK_LIBS
-${G2O_LIBS}
+${G2O_LIBRARIES}
 ${vio_common_LIBRARIES}
 )
 
