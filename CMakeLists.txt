@@ -87,8 +87,6 @@ LIST(APPEND SOURCEFILES
 src/anchored_points.cpp
 src/IMU_constraint.cpp
 src/scale_solver.cpp
-include/vio_g2o/IMUErrorModel.h
-include/vio_g2o/IMUErrorModel.cpp
 include/vio_g2o/transformations.h
 )
 
