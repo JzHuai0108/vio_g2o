@@ -7,7 +7,7 @@ SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
 
 SET(USE_ROS False) # Set False if you want to build this package without Catkin
-SET(USE_ORBSLAM_G2O True) # set true if you want to use the g2o created by Raul for ORBSLAM(2) or the g2o on github?
+SET(USE_ORBSLAM_G2O false) # set true if you want to use the g2o created by Raul for ORBSLAM(2) or the g2o on github?
 ADD_DEFINITIONS(-DMONO) #enable compiling monocular related g2o edges and vertices
 
 # Set build flags. Set IS_ARM on odroid board as environment variable
