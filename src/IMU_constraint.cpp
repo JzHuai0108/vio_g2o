@@ -698,7 +698,7 @@ IMUProcessor::IMUProcessor(const std::string imu_file, const double sample_inter
 Sophus::SE3d IMUProcessor::propagate(const double time_frame)
 {
     bool is_meas_good=ig.getObservation(time_frame);
-    assert(is_meas_good);
+    assert(ig.measurement.size());
     time_pair[0]=time_pair[1];
     time_pair[1]=time_frame;
 
