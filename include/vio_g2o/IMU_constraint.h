@@ -356,7 +356,7 @@ void predictStates(const Sophus::SE3Group<Scalar> &T_sk_to_w, const Eigen::Matri
     Eigen::Quaternion<Scalar> q_new, q_old(T_sk_to_w.unit_quaternion().conjugate());
     Scalar dt=measurements[1][0]-time_pair[0];
     Scalar covupt_time(time_pair[0]);//the time to which the covariance is updated. N.B. the initial covariance is updated to $t_k$
-    assert(dt>Scalar(0)&&dt<=Scalar(0.01+1e-8));
+    assert(dt>Scalar(0)&&dt<=Scalar(0.02+1e-8));
 
     IMUErrorModel<Scalar> iem(shape_matrices, speed_bias_k.template block<6,1>(3,0));
     iem.estimate(measurements[0].template block<3,1>(4,0), measurements[0].template block<3,1>(1,0));
