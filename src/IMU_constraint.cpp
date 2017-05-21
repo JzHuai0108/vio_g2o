@@ -708,6 +708,9 @@ Sophus::SE3d IMUProcessor::propagate(const double time_frame)
     if(bPredictCov)
         holder= &P_;
 
+//    std::cout <<"predictStates input ig.measurement 0, 1, and last entry time "<< ig.measurement[0][0] <<" "
+//    <<ig.measurement[1][0] <<" "<<ig.measurement.back()[0] <<" and frame time pair "<<
+//                             time_pair[0] <<" " << time_pair[1]<< std::endl;
     predictStates(T_s1_to_w, speed_bias_1, time_pair,
                              ig.measurement, imu_.gwomegaw, imu_.q_n_aw_babw,
                              &pred_T_s2_to_w, &tempVs0inw, holder);
@@ -855,11 +858,10 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
 }
 
 void IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp, Eigen::Matrix<double, 15, 15> *pCov)
-{
-    assert(!bStatesInitialized);
+{    
     bStatesInitialized=true;
-    bool is_meas_good=ig.getObservation(timestamp);
-    assert(!is_meas_good);
+    ig.getObservation(timestamp);
+
     time_pair[0]=time_pair[1];
     time_pair[1]=timestamp;
     resetStates(Ts1tow, sb1);
