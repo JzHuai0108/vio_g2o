@@ -807,7 +807,7 @@ bool G2oEdgeSim3
       if (i!=j)
         information()(j,i) = information()(i,j);
     }
-  return is;
+  return is.good();
 }
 
 bool G2oEdgeSim3
