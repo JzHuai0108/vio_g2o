@@ -284,7 +284,10 @@ void G2oEdgeIMUConstraint
     J_pred.block<3,3>(9,9)=Matrix3d::Identity();//b_a
     J_pred.block<3,3>(12,12)=Matrix3d::Identity();//b_g
     //TODO: verify that numerical Jacobian satisfy $J_pred\approx diag(third(_error.head<6>(), SE3d()),I)$
-    _information=(J_pred*P*J_pred.transpose()).inverse();
+    Eigen::Matrix<double, 15, 15> Atemp = J_pred*(0.5*P + 0.5*P.transpose())*J_pred.transpose();
+    _information=Atemp.llt().solve(Eigen::Matrix<double,15,15>::Identity());
+    //    _information=Atemp.inverse(); // this is less efficient and prone to numerical issues
+    _information= 0.5*_information+ 0.5*_information.transpose().eval();
 
     //    cout<<"new P(9,9)"<<P.topLeftCorner<9,9>()<<endl;
     //    cout<<_information.diagonal().transpose()<<endl;
@@ -749,9 +752,12 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
     imu_traj_stream<<"% time/sec, pos of sensor IMU in the local world NED frame, vsinw, qs2w(xyzw), ba, bg, std of [delta rsinw, delta vsinw, psi_w, ba, bg]"<<endl;
 
     bool is_meas_good=ig.getObservation(finish_time);
+
     if(!is_meas_good)
     {
-        std::cout<<"Error getting valid inertial observations!"<<std::endl;
+        std::cout <<"IMU measurement start time "<<ig.measurement.front()[0]<<std::endl;
+        std::cout <<"IMU measurement finish time "<<ig.measurement.back()[0]<<std::endl;
+        std::cerr<<"Error getting valid inertial observations!"<<std::endl;
         imu_traj_stream.close();
         return;
     }
