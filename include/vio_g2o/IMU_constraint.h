@@ -760,7 +760,8 @@ public:
     // read each measurement from the IMU file and do free inertial integration
     void freeInertial(std::string output_file, double finish_time);
 
-    void initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp,
+    // return true if init successful
+    bool initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp,
                     Eigen::Matrix<double, 15, 15> *pCov=(Eigen::Matrix<double, 15, 15> *)NULL);
     void resetStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1);
 

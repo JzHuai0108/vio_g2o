@@ -755,8 +755,10 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
 
     if(!is_meas_good)
     {
-        std::cout <<"IMU measurement start time "<<ig.measurement.front()[0]<<std::endl;
-        std::cout <<"IMU measurement finish time "<<ig.measurement.back()[0]<<std::endl;
+        if(ig.measurement.size()){
+            std::cout <<"IMU measurement start time "<<ig.measurement.front()[0]<<std::endl;
+            std::cout <<"IMU measurement finish time "<<ig.measurement.back()[0]<<std::endl;
+        }
         std::cerr<<"Error getting valid inertial observations!"<<std::endl;
         imu_traj_stream.close();
         return;
@@ -863,10 +865,15 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
     imu_traj_stream.close();
 }
 
-void IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp, Eigen::Matrix<double, 15, 15> *pCov)
+bool IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp, Eigen::Matrix<double, 15, 15> *pCov)
 {    
+    if(ig.getObservation(timestamp) == false) //inertial readings does not cover timestamp
+    {
+        bStatesInitialized=false;
+        return false;
+    }
+
     bStatesInitialized=true;
-    ig.getObservation(timestamp);
 
     time_pair[0]=time_pair[1];
     time_pair[1]=timestamp;
@@ -876,6 +883,7 @@ void IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<do
         P_= *pCov;
         bPredictCov=true;
     }
+    return true;
 }
 
 void IMUProcessor::resetStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1)
