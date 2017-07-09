@@ -6,7 +6,7 @@
 #include "vio_g2o/anchored_points.h" //G2oVertexSE3
 
 #include "vio/eigen_utils.h" //for rvec2quat, skew3d
-#include "vio/ImuGrabber.h" //imugrabber
+#include "vio/ImuGrabber.h"
 
 #include <sophus/se3.hpp>
 #ifdef MONO
@@ -18,6 +18,8 @@
 #include <iostream>
 
 namespace vio{
+
+typedef std::vector<Eigen::Matrix<double, 7,1> > ImuMeasurementVector; //double timestamp, accel xyz m/s^2, gyro xyz rad/sec 
 
 class G2oIMUParameters : public g2o::Parameter
 {
@@ -747,37 +749,30 @@ public:
 class IMUProcessor
 {
 public:   
-    IMUProcessor(const std::string imu_file, const double sample_interval,const G2oIMUParameters &imu,
-                 vio::IMUFileType fileType=vio::PlainText);
+    IMUProcessor(const G2oIMUParameters &imu);
 
     // output the transformation from previous to current camera frame
     // propagate multiple steps from the last time_frame to current time_frame
     // which is assumed to have a larger interval than the IMU sampling interval
-    Sophus::SE3d propagate(const double time_frame);
+    Sophus::SE3d propagate(const double time_frame, const ImuMeasurementVector & imuMeas);
 
     void printStateAndCov(std::ofstream &output, double time)const;
 
     // read each measurement from the IMU file and do free inertial integration
-    void freeInertial(std::string output_file, double finish_time);
+    void freeInertial(vio::IMUGrabber& ig, std::string output_file, double finish_time);
 
     // return true if init successful
     bool initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp,
                     Eigen::Matrix<double, 15, 15> *pCov=(Eigen::Matrix<double, 15, 15> *)NULL);
     void resetStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1);
 
-    //IMU readings from t(p(k)-1) to t(p(k+1)-1)
-    const std::vector<Eigen::Matrix<double, 7,1> > & getMeasurements() const
-    {
-        return ig.measurement;
-    }
+
     Sophus::SE3d T_s1_to_w;               //IMU pose at t(k) which timestamps image indexed k
     Sophus::SE3d pred_T_s2_to_w;          //predicted IMU pose at t(k+1) of image indexed k+1
     Eigen::Matrix<double, 9,1> speed_bias_1; //IMU speed and acc bias and gyro biases at t(k)
     Eigen::Matrix<double, 9,1> pred_speed_bias_2; //predicted IMU speed in world frame at t(k+1) and biases
     double time_pair[2];              // timestamps of the last and current images, k and k+1
 
-    vio::IMUFileType ft;
-    vio::IMUGrabber ig;
     G2oIMUParameters imu_;
     bool bStatesInitialized;
     Eigen::Matrix<double, 15, 15> P_; //covariance of error states as described in sys_local_dcm_bias()
