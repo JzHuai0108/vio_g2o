@@ -72,22 +72,18 @@ void TestIMURoutine(char * argv[])
         cerr<<"Wrong path to settings file!"<<endl;
         return ;
     }
-    string imu_file=fSettings["imu_file"];
-    string imu_traj_file=fSettings["imu_traj_file"];
-    ofstream imu_traj_stream(imu_traj_file.c_str(), std::ios::out);
-    imu_traj_stream<<"%Each row is timestamp, r_c^w, v_s^w, q_c^w(x,y,z,w) all in metric units"<<endl;
+    double startTime = 500.401, finishTime = 512.329;
+    // choose start time as the first entry of the imu data,
+    // and finish time as the time of the entry before the last one
+
 
     SE3d T_s1_to_w;
-    SE3d pred_T_s2_to_w;
-    Vector3d pred_speed_2;
     Matrix<double, 9,1> speed_bias_1=Matrix<double, 9,1>::Zero();
     Mat vs0inw;
     fSettings["vs0inw"]>>vs0inw;
     speed_bias_1[0]=vs0inw.at<double>(0);
     speed_bias_1[1]=vs0inw.at<double>(1);
     speed_bias_1[2]=vs0inw.at<double>(2);
-
-    double time_pair[2]={0, 1799.0/30.0};
 
     cv::Mat na, nw, acc_bias_var, gyro_bias_var;
     fSettings["acc_bias_var"]>>acc_bias_var;
@@ -119,6 +115,14 @@ void TestIMURoutine(char * argv[])
     q_n_aw_babw.segment(6,3)=q_noise_accbias;
     q_n_aw_babw.tail(3)=q_noise_gyrbias;
 
+    vio::G2oIMUParameters imu_;
+
+    imu_.q_n_aw_babw.head<3>()=q_noise_acc;
+    imu_.q_n_aw_babw.segment<3>(3)=q_noise_gyr;
+    imu_.q_n_aw_babw.segment<3>(6)=q_noise_accbias;
+    imu_.q_n_aw_babw.tail<3>()=q_noise_gyrbias;
+
+
     cv::Mat Rs2c, tsinc;
     fSettings["Rs2c"]>>Rs2c; fSettings["tsinc"]>>tsinc;
     Eigen::Matrix3d tempRs2c;
@@ -126,8 +130,11 @@ void TestIMURoutine(char * argv[])
     cv::cv2eigen(Rs2c, tempRs2c);
     cv::cv2eigen(tsinc, tempVec3d);
     SE3d T_s_to_c(tempRs2c, tempVec3d);
-    SE3d T_imu_from_cam=T_s_to_c.inverse();
+
     T_s1_to_w= T_s_to_c;
+
+    imu_.T_imu_from_cam=T_s_to_c.inverse();
+
 
     cv::Mat gw, wiew;
     fSettings["gw"]>>gw;
@@ -137,6 +144,8 @@ void TestIMURoutine(char * argv[])
     gwomegaw.head(3)=tempVec3d;
     cv::cv2eigen(wiew, tempVec3d);
     gwomegaw.tail(3)=tempVec3d;
+
+    imu_.gwomegaw = gwomegaw;
 
     Matrix<double, 15,15> P=Matrix<double, 15,15>::Zero();
     tempVec3d.setConstant(1e-6);
@@ -153,7 +162,22 @@ void TestIMURoutine(char * argv[])
     cv2eigen(gyro_bias_var, tempVec3d);
     tempVec3d=tempVec3d.cwiseAbs2()*4;
     P.block(12,12,3,3)=tempVec3d.asDiagonal();
-    vector<Matrix<double, 7,1> > measurements;
+
+    string imu_file=fSettings["imu_file"];
+    double imu_sample_interval=fSettings["sample_interval"];
+
+    vio::IMUProcessor* imu_proc=new vio::IMUProcessor(imu_file, imu_sample_interval, imu_,
+                                       vio::IndexedPlainText);
+
+
+    if(!imu_proc->bStatesInitialized){
+        imu_proc->initStates(T_s1_to_w, speed_bias_1, startTime, &P);
+        //ASSUME the IMU measurements are continuous and covers longer than camera data
+    }
+    std::string output_file = fSettings["output_file"];
+    imu_proc->freeInertial(output_file, finishTime);
+
+  /*  vector<Matrix<double, 7,1> > measurements;
     ifstream imu_stream(imu_file.c_str());
     string tempStr;
     getline(imu_stream,tempStr);
@@ -173,9 +197,12 @@ void TestIMURoutine(char * argv[])
         getline(imu_stream, tempStr);
     }
     imu_stream.close();
-    cout<<"total line number:"<<measurements.size()<<endl;
+    cout<<"total line number:"<<measurements.size()<<endl;*/
 
-    bool predict_cov=true;
+
+
+
+   /* bool predict_cov=true;
     int every_n_reading=3;// update covariance every n IMU readings
     Vector3d r_new, r_old(T_s1_to_w.translation()), v_new, v_old(speed_bias_1.head(3));
     Quaterniond q_new, q_old(T_s1_to_w.unit_quaternion().conjugate());
@@ -257,10 +284,10 @@ void TestIMURoutine(char * argv[])
     pred_T_s2_to_w.setQuaternion(q_new.conjugate());
     pred_T_s2_to_w.translation()=r_new;
     pred_speed_2=v_new;
-    imu_traj_stream.close();
-    cout<<pred_T_s2_to_w.matrix3x4()<<endl<<endl;
-    cout<<pred_speed_2<<endl<<endl;
-    cout<<P<<endl;
+    imu_traj_stream.close();*/
+    cout<<imu_proc->pred_T_s2_to_w.matrix3x4()<<endl<<endl;
+    cout<<imu_proc->pred_speed_bias_2<<endl<<endl;
+    cout<<imu_proc->P_.diagonal().transpose()<<endl;
 }
 int main(int argc, char *argv[])
 {

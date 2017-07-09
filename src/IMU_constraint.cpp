@@ -284,7 +284,10 @@ void G2oEdgeIMUConstraint
     J_pred.block<3,3>(9,9)=Matrix3d::Identity();//b_a
     J_pred.block<3,3>(12,12)=Matrix3d::Identity();//b_g
     //TODO: verify that numerical Jacobian satisfy $J_pred\approx diag(third(_error.head<6>(), SE3d()),I)$
-    _information=(J_pred*P*J_pred.transpose()).inverse();
+    Eigen::Matrix<double, 15, 15> Atemp = J_pred*(0.5*P + 0.5*P.transpose())*J_pred.transpose();
+    _information=Atemp.llt().solve(Eigen::Matrix<double,15,15>::Identity());
+    //    _information=Atemp.inverse(); // this is less efficient and prone to numerical issues
+    _information= 0.5*_information+ 0.5*_information.transpose().eval();
 
     //    cout<<"new P(9,9)"<<P.topLeftCorner<9,9>()<<endl;
     //    cout<<_information.diagonal().transpose()<<endl;
@@ -708,6 +711,9 @@ Sophus::SE3d IMUProcessor::propagate(const double time_frame)
     if(bPredictCov)
         holder= &P_;
 
+//    std::cout <<"predictStates input ig.measurement 0, 1, and last entry time "<< ig.measurement[0][0] <<" "
+//    <<ig.measurement[1][0] <<" "<<ig.measurement.back()[0] <<" and frame time pair "<<
+//                             time_pair[0] <<" " << time_pair[1]<< std::endl;
     predictStates(T_s1_to_w, speed_bias_1, time_pair,
                              ig.measurement, imu_.gwomegaw, imu_.q_n_aw_babw,
                              &pred_T_s2_to_w, &tempVs0inw, holder);
@@ -746,9 +752,14 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
     imu_traj_stream<<"% time/sec, pos of sensor IMU in the local world NED frame, vsinw, qs2w(xyzw), ba, bg, std of [delta rsinw, delta vsinw, psi_w, ba, bg]"<<endl;
 
     bool is_meas_good=ig.getObservation(finish_time);
+
     if(!is_meas_good)
     {
-        std::cout<<"Error getting valid inertial observations!"<<std::endl;
+        if(ig.measurement.size()){
+            std::cout <<"IMU measurement start time "<<ig.measurement.front()[0]<<std::endl;
+            std::cout <<"IMU measurement finish time "<<ig.measurement.back()[0]<<std::endl;
+        }
+        std::cerr<<"Error getting valid inertial observations!"<<std::endl;
         imu_traj_stream.close();
         return;
     }
@@ -854,12 +865,16 @@ void IMUProcessor::freeInertial(std::string output_file, double finish_time)
     imu_traj_stream.close();
 }
 
-void IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp, Eigen::Matrix<double, 15, 15> *pCov)
-{
-    assert(!bStatesInitialized);
+bool IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1, const double timestamp, Eigen::Matrix<double, 15, 15> *pCov)
+{    
+    if(ig.getObservation(timestamp) == false) //inertial readings does not cover timestamp
+    {
+        bStatesInitialized=false;
+        return false;
+    }
+
     bStatesInitialized=true;
-    bool is_meas_good=ig.getObservation(timestamp);
-    assert(!is_meas_good);
+
     time_pair[0]=time_pair[1];
     time_pair[1]=timestamp;
     resetStates(Ts1tow, sb1);
@@ -868,6 +883,7 @@ void IMUProcessor::initStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<do
         P_= *pCov;
         bPredictCov=true;
     }
+    return true;
 }
 
 void IMUProcessor::resetStates(const Sophus::SE3d &Ts1tow, const Eigen::Matrix<double, 9,1> & sb1)

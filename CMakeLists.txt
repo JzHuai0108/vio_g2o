@@ -38,7 +38,7 @@ ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
 
-  SET(G2O_INSTALL_PREFIX $ENV{HOME}/g2o/local_install)
+  SET(G2O_INSTALL_PREFIX $ENV{HOME}/catkin_ws/src/wallb/Thirdparty/g2o/local_install)
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
@@ -105,8 +105,16 @@ IF(USE_ROS)
 ENDIF()
 
 # Tests
-#ADD_EXECUTABLE(test_IMU test/test_IMU.cpp) # TODO: this depends on cv::FileStorage
-#TARGET_LINK_LIBRARIES(test_IMU ${PROJECT_NAME})
+IF(FALSE)
+set(OpenCV_INCLUDE_DIRS /usr/local/include)
+set(OpenCV_LIBS opencv_core opencv_highgui opencv_imgproc opencv_features2d opencv_flann)
+message ("opencv include dir " ${OpenCV_INCLUDE_DIRS})
+include_directories(BEFORE ${OpenCV_INCLUDE_DIRS})
+message("opencv include dirs are " ${OpenCV_INCLUDE_DIRS})
+message("opencv libs are " ${OpenCV_LIBS})
+ADD_EXECUTABLE(test_IMU test/test_IMU.cpp) # this depends on cv::FileStorage
+TARGET_LINK_LIBRARIES(test_IMU ${PROJECT_NAME} ${OpenCV_LIBS})
+ENDIF()
 
 ################################################################################
 # Create the vio_g2oConfig.cmake file for other cmake projects.
