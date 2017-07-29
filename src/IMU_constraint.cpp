@@ -698,7 +698,8 @@ IMUProcessor::IMUProcessor(const G2oIMUParameters &imu):
     time_pair[1]=-1;
 }
 
-Sophus::SE3d IMUProcessor::propagate(const double time_frame, const ImuMeasurementVector & imuMeas)
+Sophus::SE3d IMUProcessor::propagate(const double time_frame, const
+                                     std::vector<Eigen::Matrix<double, 7, 1> > & imuMeas)
 {
   
     time_pair[0]=time_pair[1];
@@ -741,7 +742,7 @@ void IMUProcessor::printStateAndCov(std::ofstream &output, double time)const {
     output<<stdDiag.transpose()<<endl;
 }
 
-void IMUProcessor::freeInertial(ImuGrabber& ig, std::string output_file, double finish_time)
+void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, double finish_time)
 {
     int every_n_reading=3;// update covariance every n IMU readings
     imu_traj_stream.open(output_file.c_str(), std::ios::out);

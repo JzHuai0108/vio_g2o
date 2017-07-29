@@ -19,8 +19,6 @@
 
 namespace vio{
 
-typedef std::vector<Eigen::Matrix<double, 7,1> > ImuMeasurementVector; //double timestamp, accel xyz m/s^2, gyro xyz rad/sec 
-
 class G2oIMUParameters : public g2o::Parameter
 {
 public:
@@ -754,7 +752,8 @@ public:
     // output the transformation from previous to current camera frame
     // propagate multiple steps from the last time_frame to current time_frame
     // which is assumed to have a larger interval than the IMU sampling interval
-    Sophus::SE3d propagate(const double time_frame, const ImuMeasurementVector & imuMeas);
+    Sophus::SE3d propagate(const double time_frame, const
+                           std::vector<Eigen::Matrix<double, 7, 1> > & imuMeas);
 
     void printStateAndCov(std::ofstream &output, double time)const;
 
