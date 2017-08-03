@@ -33,12 +33,12 @@ IF(USE_ORBSLAM_G2O)
   ADD_DEFINITIONS(-DUSE_SLIM_G2O)
 #  SET(ORBSLAM_G2O_PATH) #provide this variable as an CMAKE argument
   SET(G2O_INCLUDE_DIR ${ORBSLAM_G2O_PATH}/g2o)
-  SET(G2O_LIBS ${ORBSLAM_G2O_PATH}/g2o/lib/libg2o.so)
+  SET(G2O_LIBRARIES ${ORBSLAM_G2O_PATH}/g2o/lib/libg2o.so)
 ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
 
-  SET(G2O_INSTALL_PREFIX $ENV{HOME}/workspace/wallb/Thirdparty/g2o/local_install)
+#  SET(G2O_INSTALL_PREFIX) #provide this variable as an CMAKE argument
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
@@ -106,8 +106,7 @@ ENDIF()
 
 # Tests
 IF(FALSE)
-set(OpenCV_INCLUDE_DIRS /usr/local/include)
-set(OpenCV_LIBS opencv_core opencv_highgui opencv_imgproc opencv_features2d opencv_flann)
+find_package(OpenCV 2.4 REQUIRED)
 message ("opencv include dir " ${OpenCV_INCLUDE_DIRS})
 include_directories(BEFORE ${OpenCV_INCLUDE_DIRS})
 message("opencv include dirs are " ${OpenCV_INCLUDE_DIRS})
