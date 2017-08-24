@@ -38,7 +38,6 @@ ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
 
-  SET(G2O_INSTALL_PREFIX $ENV{HOME}/catkin_ws/src/wallb/Thirdparty/g2o/local_install)
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
