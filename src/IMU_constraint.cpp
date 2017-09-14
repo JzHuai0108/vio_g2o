@@ -761,7 +761,7 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
         return;
     }
     time_pair[0]=time_pair[1];
-    time_pair[1]=finish_time;
+    time_pair[1]=ig.measurement.back()[0] - 0.001;
 
     pred_T_s2_to_w= T_s1_to_w;
     pred_speed_bias_2= speed_bias_1;

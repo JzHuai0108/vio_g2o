@@ -27,6 +27,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -
 # Add plain cmake packages 
 FIND_PACKAGE(Eigen REQUIRED)
 FIND_PACKAGE(vio_common REQUIRED)
+MESSAGE("vio_common_INCLUDE_DIRS  " ${vio_common_INCLUDE_DIRS} )
 FIND_PACKAGE(Sophus REQUIRED) # the sophus (commit number b474f0) repo of Steven Lovegrove's github account is preferred
 
 IF(USE_ORBSLAM_G2O)

@@ -2,7 +2,7 @@
 #ifndef G2O_IMU_CONSTRAINT_H
 #define G2O_IMU_CONSTRAINT_H
 
-#include "vio/IMUErrorModel.cpp" //template class
+#include "vio/IMUErrorModel.h" //template class
 #include "vio_g2o/anchored_points.h" //G2oVertexSE3
 
 #include "vio/eigen_utils.h" //for rvec2quat, skew3d
@@ -329,9 +329,10 @@ void sys_local_dcm_bias(const Eigen::Matrix<Scalar, 3,1> & rs0, const Eigen::Mat
     (*P)=STM*(*P)*STM.transpose()+Qd;// covariance of the navigation states and imu error terms
 }
 
-//given pose/velocity of IMU sensor, i.e., T_sensor_to_world, v_sensor_in_world,
-// and IMU biases at epoch t(k), i.e., time_pair[0], measurements from t(p^k-1) to t(p^{k+1}-1),
-// where t(p^k-1) is the closest epoch to t(k) less or equal to t(k), and gravity in world frame in m/s^2
+
+// given pose/velocity of IMU sensor, i.e., T_sensor_to_world, v_sensor_in_world,
+// and IMU biases at epoch t(k), i.e., time_pair[0], measurements from t(k) to t(k+1},
+// and gravity in world frame in m/s^2
 // which can be roughly computed using some EGM model or assume constant, e.g., 9.81 m/s^2
 // and earth rotation rate in world frame in rad/sec which can often be set to 0
 // predict states in terms of IMU sensor frame at epoch t(k+1), i.e., time_pair[1]
@@ -339,76 +340,130 @@ void sys_local_dcm_bias(const Eigen::Matrix<Scalar, 3,1> & rs0, const Eigen::Mat
 // \delta rs in w, \delta v s in w, \psi w, ba, bg. where \tilde{R}_s^w=(I-[\psi^w]_\times)R_s^w
 // covariance of states can be treated more rigorously as in ethz asl sensor_fusion on github by Stephan Weiss
 // P stores covariance at t(k), update it to t(k+1)
-// optionally, shape_matrices which includes random constants S_a, S_g, T_s, can be used to correct IMU measurements.
+// optionally, shape_matrices which includes random constants T_g, T_s, T_a, can be used to correct IMU measurements.
+// each measurement has timestamp in sec, gyro measurements in m/s^2, accelerometer measurements in m/s^2
 
 template<typename Scalar>
-void predictStates(const Sophus::SE3Group<Scalar> &T_sk_to_w, const Eigen::Matrix<Scalar, 9,1>& speed_bias_k,
+void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > &T_sk_to_w,
+                   const Eigen::Matrix<Scalar, 9,1>& speed_bias_k,
                    const Scalar * time_pair,
                    const std::vector<Eigen::Matrix<Scalar, 7,1> >& measurements, const Eigen::Matrix<Scalar, 6,1> & gwomegaw,
                    const Eigen::Matrix<Scalar, 12, 1>& q_n_aw_babw,
-                   Sophus::SE3Group<Scalar>* pred_T_skp1_to_w, Eigen::Matrix<Scalar, 3,1>* pred_speed_kp1,
+                   std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > * pred_T_skp1_to_w, Eigen::Matrix<Scalar, 3,1>* pred_speed_kp1,
                    Eigen::Matrix<Scalar, 15,15> *P, const Eigen::Matrix<Scalar, 27,1> shape_matrices= Eigen::Matrix<Scalar, 27,1>::Zero())
 {
     bool predict_cov=(P!=NULL);
-    int every_n_reading=2;// update covariance every n IMU readings,
+    const int every_n_reading=2;// update covariance every n IMU readings,
     // the eventual covariance has little to do with this param as long as it remains small
-    Eigen::Matrix<Scalar, 3,1> r_new, r_old(T_sk_to_w.translation()), v_new, v_old(speed_bias_k.template head<3>());
-    Eigen::Quaternion<Scalar> q_new, q_old(T_sk_to_w.unit_quaternion().conjugate());
-    Scalar dt=measurements[1][0]-time_pair[0];
-    Scalar covupt_time(time_pair[0]);//the time to which the covariance is updated. N.B. the initial covariance is updated to $t_k$
-    Scalar maxTimeGap(0.1);
-    assert(dt>Scalar(0)&&dt<=maxTimeGap); // dt should be smaller than the maximum time gap between back to back imu readings
+    Eigen::Matrix<Scalar, 3,1> r_new, r_old(T_sk_to_w.second), v_new, v_old(speed_bias_k.template head<3>());
+    Eigen::Quaternion<Scalar> q_new, q_old(T_sk_to_w.first.conjugate());    
+    assert(measurements.front()[0] <= time_pair[0] && measurements.back()[0] >= time_pair[1]);
 
-    IMUErrorModel<Scalar> iem(shape_matrices, speed_bias_k.template block<6,1>(3,0));
-    iem.estimate(measurements[0].template block<3,1>(4,0), measurements[0].template block<3,1>(1,0));
+    Scalar covupt_time(0.0);//the delta time to which the covariance is updated. N.B. the initial covariance is updated to $t_k$
 
     const Eigen::Matrix<Scalar, 3,1> qna=q_n_aw_babw.template head<3>(), qnw=q_n_aw_babw.template segment<3>(3),
             qnba=q_n_aw_babw.template segment<3>(6),qnbw=q_n_aw_babw.template tail<3>();
-    strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
-                               dt, gwomegaw, &r_new, &v_new, &q_new);
+    IMUErrorModel<Scalar> iem(speed_bias_k.template block<6,1>(3,0), shape_matrices);
+    Scalar time = time_pair[0];
+    Scalar t_end = time_pair[1];
+    Scalar end = t_end;
+    Scalar Delta_t = Scalar(0);
+    bool hasStarted = false;
+    int i = 0;
+    Scalar nexttime;
+    for(typename std::vector<Eigen::Matrix<Scalar, 7, 1 > >::const_iterator it = measurements.begin();
+          it != measurements.end(); ++it) {
 
+      Eigen::Matrix<Scalar,3,1> omega_S_0 = it->template block<3,1>(1,0); //measurements[0].template block<3,1>(1,0), measurements[0].template block<3,1>(4,0))
+      Eigen::Matrix<Scalar,3,1> acc_S_0 = it->template block<3,1>(4,0);
+      Eigen::Matrix<Scalar,3,1> omega_S_1 = (it + 1)->template block<3,1>(1,0);
+      Eigen::Matrix<Scalar,3,1> acc_S_1 = (it + 1)->template block<3,1>(4,0);
+
+      // time delta
+      if ((it + 1) == measurements.end()) {
+        nexttime = t_end;
+      } else
+        nexttime = (*(it + 1))[0];
+      Scalar dt = nexttime - time;
+
+      if (end < nexttime) {
+        Scalar interval = nexttime - (*it)[0];
+        nexttime = t_end;
+        dt = nexttime - time;
+        const Scalar r = dt / interval;
+        omega_S_1 = ((Scalar(1.0) - r) * omega_S_0 + r * omega_S_1).eval();
+        acc_S_1 = ((Scalar(1.0) - r) * acc_S_0 + r * acc_S_1).eval();
+      }
+
+      if (dt <= Scalar(0.0)) {
+        continue;
+      }
+      Delta_t += dt;
+
+      if (!hasStarted) {
+        hasStarted = true;
+        const Scalar r = dt / (nexttime - (*it)[0]);
+        omega_S_0 = (r * omega_S_0 + (Scalar(1.0) - r) * omega_S_1).eval();
+        acc_S_0 = (r * acc_S_0 + (Scalar(1.0) - r) * acc_S_1).eval();
+      }
+
+      // actual propagation
+      iem.estimate(Scalar(0.5)*(omega_S_0+omega_S_1), Scalar(0.5)*(acc_S_0+acc_S_1));
+      strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
+                                 dt, gwomegaw, &r_new, &v_new, &q_new);
+      if(predict_cov&&(i%every_n_reading==0))
+      {
+          sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
+                             Delta_t-covupt_time, qna, qnw, qnba, qnbw,P);
+          //for more precise covariance update, we can use average estimated accel and angular rate over n(every_n_reading) IMU readings
+          covupt_time=Delta_t;
+      }
+
+      time = nexttime;
+      ++i;
+
+      if (nexttime == t_end)
+        break;
+
+      r_old=r_new;
+      v_old=v_new;
+      q_old=q_new;
+    }
+    assert(nexttime == t_end);
+
+    // the last piece of covariance
     if(predict_cov)
     {
         sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
-                           measurements[1][0]-covupt_time,qna, qnw, qnba, qnbw,P);
-        //for more precise covariance update, we can use average estimated accel and angular rate over n(every_n_reading) IMU readings
-        covupt_time=measurements[1][0];
+                           Delta_t-covupt_time,qna, qnw, qnba, qnbw,P);
+        covupt_time=Delta_t;
     }
-    r_old=r_new;
-    v_old=v_new;
-    q_old=q_new;
-    int unsigned i=1;
-    for (; i<measurements.size()-1;++i){
-        dt=measurements[i+1][0]-measurements[i][0];
-        iem.estimate(measurements[i].template block<3,1>(4,0), measurements[i].template block<3,1>(1,0));
-        strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est,
-                                   iem.w_est, dt, gwomegaw, &r_new, &v_new, &q_new);
-        if(predict_cov&&(i%every_n_reading==0))
-        {
-            sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est,
-                               iem.w_est, measurements[i+1][0]-covupt_time,qna, qnw, qnba, qnbw,P);
-            covupt_time=measurements[i+1][0];
-        }
-        r_old=r_new;
-        v_old=v_new;
-        q_old=q_new;
-    }
-    //assert(i==measurements.size()-1);
-    dt=time_pair[1]-measurements[i][0];//the last measurement
-    assert(dt>=Scalar(0)&& dt<maxTimeGap);
-    iem.estimate(measurements[i].template block<3,1>(4,0), measurements[i].template block<3,1>(1,0));
-    strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
-                               dt, gwomegaw, &r_new, &v_new, &q_new);
-    if(predict_cov)
-    {
-        sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
-                           time_pair[1]-covupt_time,qna, qnw, qnba, qnbw,P);
-        covupt_time=time_pair[1];
-    }
-    pred_T_skp1_to_w->setQuaternion(q_new.conjugate());
-    pred_T_skp1_to_w->translation()=r_new;
+    pred_T_skp1_to_w->first = q_new.conjugate();
+    pred_T_skp1_to_w->second = r_new;
     (*pred_speed_kp1)=v_new;
 }
+
+
+template<typename Scalar>
+void predictStates(const Sophus::SE3Group<Scalar> &T_sk_to_w,
+                   const Eigen::Matrix<Scalar, 9,1>& speed_bias_k,
+                   const Scalar * time_pair,
+                   const std::vector<Eigen::Matrix<Scalar, 7,1> >& measurements, const Eigen::Matrix<Scalar, 6,1> & gwomegaw,
+                   const Eigen::Matrix<Scalar, 12, 1>& q_n_aw_babw,
+                   Sophus::SE3Group<Scalar> * pred_T_skp1_to_w, Eigen::Matrix<Scalar, 3,1>* pred_speed_kp1,
+                   Eigen::Matrix<Scalar, 15,15> *P, const Eigen::Matrix<Scalar, 27,1> shape_matrices= Eigen::Matrix<Scalar, 27,1>::Zero())
+{
+    std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > pred_T_skp1_to_wx;
+    predictStatesImpl<Scalar>(std::make_pair(T_sk_to_w.template unit_quaternion(), T_sk_to_w.template translation()),
+                  speed_bias_k,
+                  time_pair,
+                  measurements, gwomegaw,
+                  q_n_aw_babw, &pred_T_skp1_to_wx,
+                  pred_speed_kp1,
+                  P, shape_matrices);
+    (*pred_T_skp1_to_w) = Sophus::SE3Group<Scalar>( pred_T_skp1_to_wx.first, pred_T_skp1_to_wx.second);
+}
+
 // g2oedgeimuconstraint with 4 vertices, g2overtexse3, g2overtexspeedbias at k, g2overtexse3, g2overtexspeedbias at k+1
 // where g2overtexse3 is the transform from the world frame to the camera frame(a reference sensor frame), g2overtexspeedbias is
 // the velocity of the IMU sensor in the world frame, and IMU acc and gyro biases
