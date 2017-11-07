@@ -331,7 +331,7 @@ void sys_local_dcm_bias(const Eigen::Matrix<Scalar, 3,1> & rs0, const Eigen::Mat
 
 
 // given pose/velocity of IMU sensor, i.e., T_sensor_to_world, v_sensor_in_world,
-// and IMU biases at epoch t(k), i.e., time_pair[0], measurements from t(k) to t(k+1},
+// and IMU biases at epoch t(k), i.e., time_pair[0], measurements from t(k) to t(k+1}, each entry is (time[sec], acc_xyz[m/s^2], gyro_xyz[rad/sec])
 // and gravity in world frame in m/s^2
 // which can be roughly computed using some EGM model or assume constant, e.g., 9.81 m/s^2
 // and earth rotation rate in world frame in rad/sec which can often be set to 0
@@ -363,7 +363,7 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
 
     const Eigen::Matrix<Scalar, 3,1> qna=q_n_aw_babw.template head<3>(), qnw=q_n_aw_babw.template segment<3>(3),
             qnba=q_n_aw_babw.template segment<3>(6),qnbw=q_n_aw_babw.template tail<3>();
-    IMUErrorModel<Scalar> iem(speed_bias_k.template block<6,1>(3,0), shape_matrices);
+    IMUErrorModel<Scalar> iem(shape_matrices, speed_bias_k.template block<6,1>(3,0));
     Scalar time = time_pair[0];
     Scalar t_end = time_pair[1];
     Scalar end = t_end;
@@ -374,10 +374,10 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
     for(typename std::vector<Eigen::Matrix<Scalar, 7, 1 > >::const_iterator it = measurements.begin();
           it != measurements.end(); ++it) {
 
-      Eigen::Matrix<Scalar,3,1> omega_S_0 = it->template block<3,1>(1,0); //measurements[0].template block<3,1>(1,0), measurements[0].template block<3,1>(4,0))
-      Eigen::Matrix<Scalar,3,1> acc_S_0 = it->template block<3,1>(4,0);
-      Eigen::Matrix<Scalar,3,1> omega_S_1 = (it + 1)->template block<3,1>(1,0);
-      Eigen::Matrix<Scalar,3,1> acc_S_1 = (it + 1)->template block<3,1>(4,0);
+      Eigen::Matrix<Scalar,3,1> omega_S_0 = it->template block<3,1>(4,0);
+      Eigen::Matrix<Scalar,3,1> acc_S_0 = it->template block<3,1>(1,0);
+      Eigen::Matrix<Scalar,3,1> omega_S_1 = (it + 1)->template block<3,1>(4,0);
+      Eigen::Matrix<Scalar,3,1> acc_S_1 = (it + 1)->template block<3,1>(1,0);
 
       // time delta
       if ((it + 1) == measurements.end()) {
