@@ -26,8 +26,10 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -
 
 # Add plain cmake packages 
 FIND_PACKAGE(Eigen REQUIRED)
-FIND_PACKAGE(vio_common REQUIRED)
-FIND_PACKAGE(Sophus REQUIRED) # the sophus (commit number b474f0) repo of Steven Lovegrove's github account is preferred
+
+set(Sophus_INCLUDE_DIRS $ENV{HOME}/slam_devel/sophus/include)
+set(vio_common_INCLUDE_DIRS $ENV{HOME}/slam_devel/vio_common/include)
+set(vio_common_LIBRARIES $ENV{HOME}/slam_devel/vio_common/lib/libvio_common.so)
 
 IF(USE_ORBSLAM_G2O)
   ADD_DEFINITIONS(-DUSE_SLIM_G2O)
@@ -38,7 +40,6 @@ ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
 
-  SET(G2O_INSTALL_PREFIX $ENV{HOME}/g2o/local_install)
   SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
   SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
