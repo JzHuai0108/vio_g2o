@@ -26,9 +26,10 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -
 
 # Add plain cmake packages 
 FIND_PACKAGE(Eigen REQUIRED)
-FIND_PACKAGE(vio_common REQUIRED)
-MESSAGE("vio_common_INCLUDE_DIRS  " ${vio_common_INCLUDE_DIRS} )
-FIND_PACKAGE(Sophus REQUIRED) # the sophus (commit number b474f0) repo of Steven Lovegrove's github account is preferred
+
+set(Sophus_INCLUDE_DIRS ${INSTALL_PREFIX}/sophus/include)
+set(vio_common_INCLUDE_DIRS ${INSTALL_PREFIX}/vio_common/include)
+set(vio_common_LIBRARIES ${INSTALL_PREFIX}/vio_common/lib/libvio_common.so)
 
 IF(USE_ORBSLAM_G2O)
   ADD_DEFINITIONS(-DUSE_SLIM_G2O)
@@ -39,9 +40,8 @@ ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
 
-#  SET(G2O_INSTALL_PREFIX) #provide this variable as an CMAKE argument
-  SET(G2O_INCLUDE_DIR ${G2O_INSTALL_PREFIX}/include)
-  SET(G2O_LIBRARY_DIR ${G2O_INSTALL_PREFIX}/lib)
+  SET(G2O_INCLUDE_DIR ${INSTALL_PREFIX}/g2o/include)
+  SET(G2O_LIBRARY_DIR ${INSTALL_PREFIX}/g2o/lib)
   LINK_DIRECTORIES(${G2O_LIBRARY_DIR})
   LIST(APPEND G2O_LIBRARIES
   cholmod
