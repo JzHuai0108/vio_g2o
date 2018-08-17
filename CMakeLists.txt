@@ -7,7 +7,13 @@ SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
 
 SET(USE_ROS False) # Set False if you want to build this package without Catkin
-SET(USE_ORBSLAM_G2O false) # set true if you want to use the g2o created by Raul for ORBSLAM(2) or the g2o on github?
+IF(NOT DEFINED ORBSLAM_G2O_PATH)
+    SET(USE_ORBSLAM_G2O false) # use the g2o on github
+ELSE()
+    SET(USE_ORBSLAM_G2O true) # use the g2o created by Raul for ORBSLAM(2)
+    MESSAGE("ORBSLAM_G2O_PATH " ${ORBSLAM_G2O_PATH})
+ENDIF()
+
 ADD_DEFINITIONS(-DMONO) #enable compiling monocular related g2o edges and vertices
 
 # Set build flags. Set IS_ARM on odroid board as environment variable
@@ -33,9 +39,8 @@ set(vio_common_LIBRARIES ${INSTALL_PREFIX}/vio_common/lib/libvio_common.so)
 
 IF(USE_ORBSLAM_G2O)
   ADD_DEFINITIONS(-DUSE_SLIM_G2O)
-#  SET(ORBSLAM_G2O_PATH) #provide this variable as an CMAKE argument
-  SET(G2O_INCLUDE_DIR ${ORBSLAM_G2O_PATH}/g2o)
-  SET(G2O_LIBRARIES ${ORBSLAM_G2O_PATH}/g2o/lib/libg2o.so)
+  SET(G2O_INCLUDE_DIR ${ORBSLAM_G2O_PATH})
+  SET(G2O_LIBRARIES ${ORBSLAM_G2O_PATH}/lib/libg2o.so)
 ELSE()
   find_package(Cholmod REQUIRED)
   FIND_PACKAGE(SuiteSparse REQUIRED)
@@ -59,7 +64,6 @@ ELSE()
   )
 ENDIF()
 
-# Include dirs
 INCLUDE_DIRECTORIES(
   include
   include/g2o_EXTERNAL
@@ -83,7 +87,6 @@ ELSE()
   SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 ENDIF()
 
-# Set Sourcefiles
 LIST(APPEND SOURCEFILES 
 src/anchored_points.cpp
 src/IMU_constraint.cpp
@@ -108,10 +111,11 @@ ENDIF()
 # Tests
 IF(FALSE)
 find_package(OpenCV 2.4 REQUIRED)
-message ("opencv include dir " ${OpenCV_INCLUDE_DIRS})
+
+MESSAGE ( STATUS "Found OpenCV: ${OpenCV_VERSION}" )
+MESSAGE ( STATUS "OpenCV_INCLUDE_DIRS= ${OpenCV_INCLUDE_DIRS}" )
+
 include_directories(BEFORE ${OpenCV_INCLUDE_DIRS})
-message("opencv include dirs are " ${OpenCV_INCLUDE_DIRS})
-message("opencv libs are " ${OpenCV_LIBS})
 ADD_EXECUTABLE(test_IMU test/test_IMU.cpp) # this depends on cv::FileStorage
 TARGET_LINK_LIBRARIES(test_IMU ${PROJECT_NAME} ${OpenCV_LIBS})
 ENDIF()
