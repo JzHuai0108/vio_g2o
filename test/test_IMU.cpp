@@ -1,6 +1,6 @@
 
 #include "vio_g2o/IMU_constraint.h"
-#include "vio_common/ImuGrabber.h"
+#include "vio/ImuGrabber.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/core/eigen.hpp"
 #include <iostream>

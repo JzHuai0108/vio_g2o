@@ -1,8 +1,8 @@
-
 #include "vio_g2o/IMU_constraint.h"
-#include "vio/timegrabber.h" //imugrabber
+#include "vio/TimeGrabber.h"
 
-#include "ceres/autodiff.h" //autodiff included in Thirdparty/g2o_External
+#include "g2o/EXTERNAL/ceres/autodiff.h"
+
 namespace vio{
 using namespace Eigen;
 using namespace Sophus;
@@ -85,9 +85,7 @@ bool G2oEdgeIMUConstraint::read(std::istream& is) {
 
 template <typename T>
 bool G2oEdgeIMUConstraint
-::operator ()( const  T* pTw2ck, const T* epsilonk, const T* pXsbk, const T* pTw2ckp1, const T* pXsbkp1, T* error) const
-//must use const because AutoDiff::Differentiate's first argument is const *this
-{
+::operator ()( const  T* pTw2ck, const T* epsilonk, const T* pXsbk, const T* pTw2ckp1, const T* pXsbkp1, T* error) const {
     //given IMU measurements, and states at time 1,i.e., t(k), predict states at time 2, i.e., t(k+1)
     const Eigen::Map<const Sophus::SE3Group<T> > se3Tw2ck(pTw2ck); //qxyzw txyz
     typename Eigen::Matrix<T, 6, 1, Eigen::ColMajor>::ConstMapType epsk(epsilonk);
@@ -126,9 +124,7 @@ bool G2oEdgeIMUConstraint
 template <typename T>
 bool G2oEdgeIMUConstraintEx
 ::operator ()( const  T* pTw2ck, const T* epsilonk, const T* pXsbk, const T* pTw2ckp1,
-               const T* pXsbkp1, const T* pSags, T* error) const
-//must use const because AutoDiff::Differentiate's first argument is const *this
-{
+               const T* pXsbkp1, const T* pSags, T* error) const {
     //given IMU measurements, and states at time 1,i.e., t(k), predict states at time 2, i.e., t(k+1)
     const Eigen::Map<const Sophus::SE3Group<T> > se3Tw2ck(pTw2ck); //qxyzw txyz
     typename Eigen::Matrix<T, 6, 1, Eigen::ColMajor>::ConstMapType epsk(epsilonk);
@@ -274,8 +270,9 @@ void G2oEdgeIMUConstraint
                                     (params_imu.T_imu_from_cam*T_c2_from_world->estimate()).data()};
     double *jacobians[3] = {NULL, dTinv_de_AD.data(), NULL };
     LogDeltaSE3Vee deltaTvee;
-    ceres::internal::AutoDiff<LogDeltaSE3Vee, double, kGlobalSize, kLocalSize, kGlobalSize>
-            ::Differentiate(deltaTvee, parameters, num_outputs, value, jacobians);
+    using ParameterDims = ceres::internal::StaticParameterDims<kGlobalSize, kLocalSize, kGlobalSize>;
+    ceres::internal::AutoDifferentiate<num_outputs, ParameterDims, LogDeltaSE3Vee, double>(
+        deltaTvee, parameters, num_outputs, value, jacobians);
     J_pred.block<6,3>(0,0)= dTinv_de_AD.block<6,3>(0,0);
     J_pred.block<6,3>(0,6)= dTinv_de_AD.block<6,3>(0,3);
     //cout<<"AD J_pred.block<6,9>(0,0):"<<endl<< J_pred.block<6,9>(0,0)<<endl;
@@ -363,14 +360,15 @@ void G2oEdgeIMUConstraint::linearizeOplus()
     const int kGlobalSize=7, kLocalSize=6, num_outputs=9, sbDim=9;
     Matrix<double, kLocalSize, 1> zero_delta= Matrix<double, kLocalSize, 1>::Zero();
 
-    typedef ceres::internal::AutoDiff<G2oEdgeIMUConstraint, double, kGlobalSize,
-            kLocalSize, sbDim, kGlobalSize, sbDim > IMUConstraintAutoDiff;
     Matrix<double, num_outputs, kLocalSize, Eigen::RowMajor> dError_dTw2ck;
     Matrix<double, num_outputs, sbDim, Eigen::RowMajor> dError_dsb;
     const double *parameters[] = { T_1w.data(), zero_delta.data(), sb_1.data(), T_2w.data(), sb_2.data()};
     double value[num_outputs];
     double *jacobians[] = { NULL, dError_dTw2ck.data(), dError_dsb.data(), NULL, NULL };
-    bool diffState = IMUConstraintAutoDiff::Differentiate(*this, parameters, num_outputs, value, jacobians);
+    using ParameterDims = ceres::internal::StaticParameterDims<kGlobalSize,
+            kLocalSize, sbDim, kGlobalSize, sbDim>;
+    bool diffState = ceres::internal::AutoDifferentiate<num_outputs, ParameterDims, G2oEdgeIMUConstraint, double>(
+        *this, parameters, num_outputs, value, jacobians);
     // copy over the Jacobians (convert row-major -> column-major)
     if (diffState) {
         _jacobianOplus[0].topLeftCorner<9,6>() = dError_dTw2ck;       
@@ -599,15 +597,16 @@ void G2oEdgeIMUConstraintEx::linearizeOplus()
     const int kGlobalSize=7, kLocalSize=6, num_outputs=9, sbDim=9, smDim=27;
     Matrix<double, kLocalSize, 1> zero_delta= Matrix<double, kLocalSize, 1>::Zero();
 
-    typedef ceres::internal::AutoDiff<G2oEdgeIMUConstraintEx, double, kGlobalSize,
-            kLocalSize, sbDim, kGlobalSize, sbDim, smDim > IMUConstraintAutoDiff;
     Matrix<double, num_outputs, kLocalSize, Eigen::RowMajor> dError_dTw2ck;
     Matrix<double, num_outputs, sbDim, Eigen::RowMajor> dError_dsb;
     Matrix<double, num_outputs, smDim, Eigen::RowMajor> dError_dsm;
     const double *parameters[] = { T_1w.data(), zero_delta.data(), sb_1.data(), T_2w.data(), sb_2.data(), sm.data()};
     double value[num_outputs];
     double *jacobians[] = { NULL, dError_dTw2ck.data(), dError_dsb.data(), NULL, NULL, dError_dsm.data() };
-    bool diffState = IMUConstraintAutoDiff::Differentiate(*this, parameters, num_outputs, value, jacobians);
+    using ParameterDims = ceres::internal::StaticParameterDims<kGlobalSize,
+            kLocalSize, sbDim, kGlobalSize, sbDim, smDim>;
+    bool diffState = ceres::internal::AutoDifferentiate<num_outputs, ParameterDims, G2oEdgeIMUConstraintEx, double>(
+        *this, parameters, num_outputs, value, jacobians);
     // copy over the Jacobians (convert row-major -> column-major)
     if (diffState) {
         _jacobianOplus[0].topLeftCorner<9,6>() = dError_dTw2ck;      
@@ -673,8 +672,9 @@ void G2oEdgeIMUConstraintEx
                                     (params_imu.T_imu_from_cam*T_c2_from_world->estimate()).data()};
     double *jacobians[3] = {NULL, dTinv_de_AD.data(), NULL };
     LogDeltaSE3Vee deltaTvee;
-    ceres::internal::AutoDiff<LogDeltaSE3Vee, double, kGlobalSize, kLocalSize, kGlobalSize>
-            ::Differentiate(deltaTvee, parameters, num_outputs, value, jacobians);
+    using ParameterDims = ceres::internal::StaticParameterDims<kGlobalSize, kLocalSize, kGlobalSize>;
+    ceres::internal::AutoDifferentiate<num_outputs, ParameterDims, LogDeltaSE3Vee, double>(
+        deltaTvee, parameters, num_outputs, value, jacobians);
     J_pred.block<6,3>(0,0)= dTinv_de_AD.block<6,3>(0,0);
     J_pred.block<6,3>(0,6)= dTinv_de_AD.block<6,3>(0,3);
     //cout<<"AD J_pred.block<6,9>(0,0):"<<endl<< J_pred.block<6,9>(0,0)<<endl;
@@ -753,16 +753,16 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
 
     if(!is_meas_good)
     {
-        if(ig.measurement.size()){
-            std::cout <<"IMU measurement start time "<<ig.measurement.front()[0]<<std::endl;
-            std::cout <<"IMU measurement finish time "<<ig.measurement.back()[0]<<std::endl;
+        if(ig.getMeasurement().size()){
+            std::cout <<"IMU measurement start time "<<ig.getMeasurement().front()[0]<<std::endl;
+            std::cout <<"IMU measurement finish time "<<ig.getMeasurement().back()[0]<<std::endl;
         }
         std::cerr<<"Error getting valid inertial observations!"<<std::endl;
         imu_traj_stream.close();
         return;
     }
     time_pair[0]=time_pair[1];
-    time_pair[1]=ig.measurement.back()[0] - 0.001;
+    time_pair[1]=ig.getMeasurement().back()[0] - 0.001;
 
     pred_T_s2_to_w= T_s1_to_w;
     pred_speed_bias_2= speed_bias_1;
@@ -770,7 +770,7 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
 #if 0 //the following two implementation gives almost identical results
     Eigen::Matrix<double, 3,1> pred_speed_2;
     predictStates(T_s1_to_w, speed_bias_1, time_pair,
-                             ig.measurement, imu_.gwomegaw, imu_.q_n_aw_babw,
+                             ig.getMeasurement(), imu_.gwomegaw, imu_.q_n_aw_babw,
                              &pred_T_s2_to_w, &pred_speed_2, &P_);
     cout<<"Final states and sqrt(P) diagonal elements:"<<endl;
     cout<<pred_T_s2_to_w.translation().transpose()<<" "<< pred_speed_2.transpose() <<endl;
@@ -789,26 +789,27 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
     Quaterniond q_new, q_old(T_s1_to_w.unit_quaternion().conjugate());
 
     vector<Eigen::Matrix<double, 7, 1>, Eigen::aligned_allocator<Eigen::Matrix<double, 7, 1> > >
-            measurements=ig.measurement;
+            measurements=ig.getMeasurement();
     double dt=measurements[1][0]-time_pair[0];
     double covupt_time(time_pair[0]);
     assert(dt>0);
     Eigen::Matrix<double,6,1> b_ga;
     b_ga.head<3>()= speed_bias_1.tail<3>();
     b_ga.tail<3>()= speed_bias_1.segment<3>(3);
-    IMUErrorModel<double> iem(b_ga);
-    iem.estimate(measurements[0].tail<3>(), measurements[0].segment<3>(1));
+    ImuErrorModel<double> iem(b_ga);
+    Eigen::Vector3d a_est, w_est;
+    iem.estimate(measurements[0].tail<3>(), measurements[0].segment<3>(1), &w_est, &a_est);
 
     Eigen::Matrix<double, 3,1> qna=imu_.q_n_aw_babw.head(3);
     Eigen::Matrix<double, 3,1> qnw=imu_.q_n_aw_babw.segment(3,3);
     Eigen::Matrix<double, 3,1> qnba=imu_.q_n_aw_babw.segment(6,3);
     Eigen::Matrix<double, 3,1> qnbw=imu_.q_n_aw_babw.tail(3);
 
-    strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
+    strapdown_local_quat_bias( r_old, v_old, q_old, a_est, w_est,
                                           dt, imu_.gwomegaw, &r_new, &v_new, &q_new);
     if(bPredictCov)
     {
-        sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
+        sys_local_dcm_bias(r_old, v_old, q_old, a_est, w_est,
                                       measurements[1][0]-covupt_time,qna, qnw, qnba, qnbw,&P_);
         covupt_time=measurements[1][0];
     }
@@ -823,13 +824,13 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
     int unsigned jack=1;
     for (; jack<measurements.size()-1;++jack){
         dt=measurements[jack+1][0]-measurements[jack][0];
-        iem.estimate(measurements[jack].tail<3>(), measurements[jack].segment<3>(1));
+        iem.estimate(measurements[jack].tail<3>(), measurements[jack].segment<3>(1), &w_est, &a_est);
 
-        strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
+        strapdown_local_quat_bias( r_old, v_old, q_old, a_est, w_est,
                                               dt, imu_.gwomegaw, &r_new, &v_new, &q_new);
         if(bPredictCov &&(jack%every_n_reading==0))
         {
-            sys_local_dcm_bias(r_old, v_old, q_old,iem.a_est, iem.w_est,
+            sys_local_dcm_bias(r_old, v_old, q_old, a_est, w_est,
                                           measurements[jack+1][0]-covupt_time,qna, qnw, qnba, qnbw,&P_);
             covupt_time=measurements[jack+1][0];
         }
@@ -846,13 +847,14 @@ void IMUProcessor::freeInertial(vio::IMUGrabber& ig, std::string output_file, do
     dt=time_pair[1]-measurements[jack][0];//the last measurement
     assert(dt>=0);
 
-    iem.estimate(measurements[jack].tail<3>(), measurements[jack].segment<3>(1));
+    iem.estimate(measurements[jack].tail<3>(), measurements[jack].segment<3>(1), &w_est, &a_est);
 
-    strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
+
+    strapdown_local_quat_bias( r_old, v_old, q_old, a_est, w_est,
                                           dt, imu_.gwomegaw, &r_new, &v_new, &q_new);
     if(bPredictCov)
     {
-        sys_local_dcm_bias(r_old, v_old, q_old,iem.a_est, iem.w_est,
+        sys_local_dcm_bias(r_old, v_old, q_old, a_est, w_est,
                                       time_pair[1]-covupt_time,qna, qnw, qnba, qnbw,&P_);
         covupt_time=time_pair[1];
     }

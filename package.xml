@@ -15,12 +15,12 @@
   <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
   <license>GPLv3</license>
 
-
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>
-  <build_depend>cmake_modules</build_depend> <!-- for FindEigen.cmake module -->
+  <build_depend>cmake_modules</build_depend>
+  <build_depend>g2o_catkin</build_depend>
+  <build_depend>vio_common</build_depend>
   <run_depend>roscpp</run_depend>
-
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

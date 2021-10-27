@@ -1,20 +1,23 @@
 # vio_g2o
 
-Depends on sophus, and vio_common which depends on eigen and opencv
+Depends on Sophus, g2o, and vio_common.
+vio_common depends on Eigen and openCV.
+Sophus is included in thirdparty/ folder as submodules.
+g2o and vio_common will be downloaded as catkin packages.
 
-# Build example
+# Build
 
+## With ROS
+```
+mkdir -p vio_g2o_ws/src
+cd vio_g2o_ws/src
+git clone --recursive https://github.com/JzHuai0108/vio_g2o.git
 
-## with g2o in ORB_SLAM2
-Assume sophus, vio_common installed in $INSTALL_PREFIX
-```
-cmake .. -DOpenCV_DIR=/opt/ros/kinetic/share/OpenCV-3.3.1 -DEIGEN_INCLUDE_DIR=/usr/include/eigen3 -DINSTALL_PREFIX=$HOME/slam_devel -DORBSLAM_G2O_PATH=../../../ORB_SLAM2/Thirdparty/g2o
-make
+wstool init
+wstool merge vio_g2o/dependencies.rosinstall
+wstool update -j 8
+
+catkin build vio_g2o -DUSE_ROS=ON -DCMAKE_BUILD_TYPE=Release -j4
+
 ```
 
-## with g2o from github
-Assume sophus, vio_common, g2o installed in $INSTALL_PREFIX
-```
-cmake .. -DOpenCV_DIR=/opt/ros/kinetic/share/OpenCV-3.3.1 -DEIGEN_INCLUDE_DIR=/usr/include/eigen3 -DINSTALL_PREFIX=$HOME/slam_devel
-make
-```

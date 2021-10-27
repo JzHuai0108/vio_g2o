@@ -1,5 +1,5 @@
 #include "vio_g2o/scale_solver.h"
-#include "vio/rand_sampler.h"
+#include "vio/Sample.h"
 
 #include "g2o/core/block_solver.h"
 #include "g2o/core/optimization_algorithm_levenberg.h"
@@ -13,7 +13,6 @@
 #include "g2o/solvers/dense/linear_solver_dense.h"
 #endif
 
-using namespace Sophus;
 using namespace Eigen;
 using namespace std;
 
@@ -120,8 +119,8 @@ void G2oEdgeScaleTrans
 {
     const G2oVertexScaleTrans * vi = static_cast<const G2oVertexScaleTrans *>(_vertices[0]);
     const G2oVertexScaleTrans * vj = static_cast<const G2oVertexScaleTrans *>(_vertices[1]);
-    Matrix<double, 4,1> stw2i= vi->estimate();
-    Matrix<double, 4,1> stw2j= vj->estimate();
+    Eigen::Matrix<double, 4,1> stw2i= vi->estimate();
+    Eigen::Matrix<double, 4,1> stw2j= vj->estimate();
     Sophus::SO3d Ri2j= vj->Rw2i*vi->Rw2i.inverse();
     // \tilde{S}_i^j - S_w^j/S_w^i
     _error[0] = _measurement[0]-stw2j[0]/stw2i[0];
@@ -134,8 +133,8 @@ linearizeOplus()
 {   
     const G2oVertexScaleTrans * vi = static_cast<const G2oVertexScaleTrans *>(_vertices[0]);
     const G2oVertexScaleTrans * vj = static_cast<const G2oVertexScaleTrans *>(_vertices[1]);
-    Matrix<double, 4,1> stw2i= vi->estimate();
-    Matrix<double, 4,1> stw2j= vj->estimate();
+    Eigen::Matrix<double, 4,1> stw2i= vi->estimate();
+    Eigen::Matrix<double, 4,1> stw2j= vj->estimate();
     Sophus::SO3d Ri2j= vj->Rw2i*vi->Rw2i.inverse();
 
     _jacobianOplusXi.setZero();
@@ -281,7 +280,7 @@ void TestScaleTransOptimizer::optimizeScaleTrans(){
     // SET KEYFRAME VERTICES
     G2oVertexScaleTrans * vS = new G2oVertexScaleTrans();
     vS->setEstimate(Eigen::Vector4d(1.0, 0,0,0));
-    vS->Rw2i= SO3d();
+    vS->Rw2i= Sophus::SO3d();
     vS->setId(0);
     vS->setFixed(true);
     optimizer.addVertex(vS);
@@ -293,7 +292,7 @@ void TestScaleTransOptimizer::optimizeScaleTrans(){
         v4[0]=sw2i_est[i];
         v4.tail<3>()= twini_est[i];
         vS->setEstimate( v4 );
-        vS->Rw2i= SO3d();
+        vS->Rw2i= Sophus::SO3d();
         vS->setId(i);
         vS->setFixed(false);
         optimizer.addVertex(vS);

@@ -2,8 +2,8 @@
 #ifndef G2O_IMU_CONSTRAINT_H
 #define G2O_IMU_CONSTRAINT_H
 
-#include "vio/IMUErrorModel.h" //template class
 #include "vio_g2o/anchored_points.h" //G2oVertexSE3
+#include "vio_g2o/ImuErrorModel.h"
 
 #include "vio/eigen_utils.h" //for rvec2quat, skew3d
 #include "vio/ImuGrabber.h"
@@ -147,7 +147,7 @@ public:
     Eigen::Matrix<double,9,1>* first_estimate;
 };
 // Concatenated shape matrix elements, including
-// elements of S_a, S_g, T_s in row major order cf. IMUErrorModel's definition
+// elements of S_a, S_g, T_s in row major order cf. ImuErrorModel's definition
 class G2oVertexShapeMatrices : public g2o::BaseVertex<27, Eigen::Matrix<double,27,1> >
 {
 public:
@@ -196,7 +196,7 @@ public:
     Eigen::Matrix<double,27,1>* first_estimate;
 };
 // extended speed bias vertex, including speed of the IMU sensor in world frame, accelerometer bias, gyro bias,
-// elements of S_a, S_g, T_s in row major order cf. IMUErrorModel's definition
+// elements of S_a, S_g, T_s in row major order cf. ImuErrorModel's definition
 class G2oVertexSpeedBiasEx : public g2o::BaseVertex<36, Eigen::Matrix<double,36,1> >
 {
 public:
@@ -331,18 +331,23 @@ void sys_local_dcm_bias(const Eigen::Matrix<Scalar, 3,1> & rs0, const Eigen::Mat
 }
 
 
-// given pose/velocity of IMU sensor, i.e., T_sensor_to_world, v_sensor_in_world,
-// and IMU biases at epoch t(k), i.e., time_pair[0], measurements from t(k) to t(k+1}, each entry is (time[sec], acc_xyz[m/s^2], gyro_xyz[rad/sec])
-// and gravity in world frame in m/s^2
-// which can be roughly computed using some EGM model or assume constant, e.g., 9.81 m/s^2
-// and earth rotation rate in world frame in rad/sec which can often be set to 0
-// predict states in terms of IMU sensor frame at epoch t(k+1), i.e., time_pair[1]
-// optionally, propagate covariance in the local world frame, the covariance corresponds to states,
-// \delta rs in w, \delta v s in w, \psi w, ba, bg. where \tilde{R}_s^w=(I-[\psi^w]_\times)R_s^w
-// covariance of states can be treated more rigorously as in ethz asl sensor_fusion on github by Stephan Weiss
-// P stores covariance at t(k), update it to t(k+1)
-// optionally, shape_matrices which includes random constants T_g, T_s, T_a, can be used to correct IMU measurements.
-// each measurement has timestamp in sec, gyro measurements in m/s^2, accelerometer measurements in m/s^2
+/*
+ * @brief Predict state at t(k+1) from t(k) with IMU measurements.
+ * @param T_sk_to_w the transform from sensor to world which transform a point to the world frame
+ * @param speed_bias_k velocity of the sensor in the world frame, accelerometer bias, gyro bias at t(k)
+ * @param time_pair time_pair[0] is t(k), time_pair[1] is t(k+1)
+ * @param measurements from t(k) to t(k+1), each entry is (time[sec], acc_xyz[m/s^2], gyro_xyz[rad/sec])
+ * @param gwomegaw gravity in world frame of unit m/s^2 and earth rotation rate in world frame in rad/sec.
+ * \f$ g_w \f$ can be roughly computed using some EGM model or assume constant, e.g., 9.81 m/s^2.
+ * earth rotation rate can often be set to 0.
+ * @param q_n_aw_babw the IMU noise power n_a, n_w, n_ba, n_bw.
+ * @param[out] pred_T_skp1_to_w predicted pose at t(k+1)
+ * @param[out] pred_speed_kp1 predicted speed and biases at t(k+1)
+ * @param[in, out] P propagated covariance in the world frame, the covariance corresponds to states,
+ * \f$ \delta r_s^w, \delta v_s^w, \psi^w, b_a, b_g \f$. where \f$ \tilde{R}_s^w=(I - [\psi^w]_\times)R_s^w \f$
+ * Initially, P stores covariance at t(k), at exit, it is updated to covariance at t(k+1).
+ * @param shape_matrices includes row-major ordered vector of T_g, T_s, T_a, can be used to correct IMU measurements.
+ */
 
 template<typename Scalar>
 void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > &T_sk_to_w,
@@ -352,8 +357,10 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
                        Eigen::aligned_allocator<Eigen::Matrix<Scalar, 7, 1> > >& measurements,
                    const Eigen::Matrix<Scalar, 6,1> & gwomegaw,
                    const Eigen::Matrix<Scalar, 12, 1>& q_n_aw_babw,
-                   std::pair<Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > * pred_T_skp1_to_w, Eigen::Matrix<Scalar, 3,1>* pred_speed_kp1,
-                   Eigen::Matrix<Scalar, 15,15> *P, const Eigen::Matrix<Scalar, 27,1> shape_matrices= Eigen::Matrix<Scalar, 27,1>::Zero())
+                   std::pair<Eigen::Quaternion<Scalar>, Eigen::Matrix<Scalar, 3, 1> > * pred_T_skp1_to_w,
+                   Eigen::Matrix<Scalar, 3,1>* pred_speed_kp1,
+                   Eigen::Matrix<Scalar, 15,15> *P, const Eigen::Matrix<Scalar, 27,1> shape_matrices = 
+                   Eigen::Matrix<Scalar, 27,1>::Zero())
 {
     bool predict_cov=(P!=NULL);
     const int every_n_reading=2;// update covariance every n IMU readings,
@@ -366,7 +373,11 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
 
     const Eigen::Matrix<Scalar, 3,1> qna=q_n_aw_babw.template head<3>(), qnw=q_n_aw_babw.template segment<3>(3),
             qnba=q_n_aw_babw.template segment<3>(6),qnbw=q_n_aw_babw.template tail<3>();
-    IMUErrorModel<Scalar> iem(shape_matrices, speed_bias_k.template block<6,1>(3,0));
+    Eigen::Matrix<Scalar, 6, 1> bgba;
+    bgba.template head<3>() = speed_bias_k.template tail<3>();
+    bgba.template tail<3>() = speed_bias_k.template segment<3>(3);
+    ImuErrorModel<Scalar> iem(bgba, shape_matrices);
+    Eigen::Matrix<Scalar,3,1> a_est, w_est;
     Scalar time = time_pair[0];
     Scalar t_end = time_pair[1];
     Scalar end = t_end;
@@ -412,12 +423,12 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
       }
 
       // actual propagation
-      iem.estimate(Scalar(0.5)*(omega_S_0+omega_S_1), Scalar(0.5)*(acc_S_0+acc_S_1));
-      strapdown_local_quat_bias( r_old, v_old, q_old, iem.a_est, iem.w_est,
+      iem.estimate(Scalar(0.5)*(omega_S_0+omega_S_1), Scalar(0.5)*(acc_S_0+acc_S_1), &w_est, &a_est);
+      strapdown_local_quat_bias( r_old, v_old, q_old, a_est, w_est,
                                  dt, gwomegaw, &r_new, &v_new, &q_new);
       if(predict_cov&&(i%every_n_reading==0))
       {
-          sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
+          sys_local_dcm_bias(r_old, v_old, q_old, a_est, w_est,
                              Delta_t-covupt_time, qna, qnw, qnba, qnbw,P);
           //for more precise covariance update, we can use average estimated accel and angular rate over n(every_n_reading) IMU readings
           covupt_time=Delta_t;
@@ -438,7 +449,7 @@ void predictStatesImpl(const std::pair< Eigen::Quaternion<Scalar>, Eigen::Matrix
     // the last piece of covariance
     if(predict_cov)
     {
-        sys_local_dcm_bias(r_old, v_old, q_old, iem.a_est, iem.w_est,
+        sys_local_dcm_bias(r_old, v_old, q_old, a_est, w_est,
                            Delta_t-covupt_time,qna, qnw, qnba, qnbw,P);
         covupt_time=Delta_t;
     }
@@ -686,7 +697,8 @@ public:
 };
 
 
-//prior of pose, measurement is transform from camera(the reference sensor frame) to world frame, vertex states are transform from world to camera frame
+// Pose prior. Measurement is transform from B (e.g., the reference sensor frame) to A frame.
+// The vertex is transform from A to B frame.
 class G2oSE3Observation6DEdge : public g2o::BaseUnaryEdge<6, Sophus::SE3d, G2oVertexSE3>
 {
 public:

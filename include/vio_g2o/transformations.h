@@ -85,7 +85,7 @@ d_expy_d_y(const Eigen::Vector3d & y)
 {
   Eigen::Matrix<double,3,6> J;
   J.topLeftCorner<3,3>().setIdentity();
-  J.bottomRightCorner<3,3>() = -Sophus::SO3::hat(y);
+  J.bottomRightCorner<3,3>() = -Sophus::SO3d::hat(y);
   return J;
 }
 

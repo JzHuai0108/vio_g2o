@@ -1,0 +1,11 @@
+- git:
+    local-name: catkin_simple
+    uri: https://github.com/catkin/catkin_simple.git
+- git:
+    local-name: g2o_catkin
+    uri: 'https://github.com/ethz-asl/g2o_catkin.git'
+- git:
+    local-name: vio_common
+    uri: https://github.com/JzHuai0108/vio_common.git
+    version: master
+
